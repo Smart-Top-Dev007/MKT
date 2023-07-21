@@ -20,6 +20,7 @@ using System.Configuration;
 using System.Reflection;
 using System.Globalization;
 using MKT.Website.UI.Middleware;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -60,6 +61,8 @@ builder.Services.Configure<RequestLocalizationOptions>(
 #region sitemap
 builder.Services.Configure<XmlSitemapOptions>(builder.Configuration.GetSection("XmlSitemap"));
 builder.Services.AddScoped<IXmlSitemapGenerator, XmlSitemapGenerator>();
+builder.Services.AddRazorPages();
+builder.Services.AddSingleton<IActionContextAccessor, ActionContextAccessor>();
 #endregion
 
 
@@ -86,12 +89,14 @@ builder.Services.AddSingleton<IAzureBlobStorageConfiguration>(new AzureBlobStora
 });
 
 
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true; // Enable compression for HTTPS requests
+});
+
+
 
 var app = builder.Build();
-
-
-
-
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -141,6 +146,8 @@ app.MapGet("/sitemap.xml", async (IXmlSitemapGenerator sitemapGenerator) =>
     }
 });
 
+// Enable compression
+app.UseResponseCompression();
 
 
 app.UseRouting();
@@ -154,7 +161,14 @@ app.UseRewriter(new RewriteOptions()
 
 app.UseAuthorization();
 
-
+app.UseEndpoints(endpoints =>
+{
+    endpoints.MapControllerRoute(
+        name: "sitemap",
+        pattern: "sitemap.xml",
+        defaults: new { controller = "Sitemap", action = "Index" });
+    endpoints.MapRazorPages();
+});
 
 app.MapControllerRoute(
     "lang",
